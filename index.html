@@ -270,7 +270,14 @@ function render(){
     "Ascending sets are targets, not mandates — if bar speed drops on the Olympic lifts, repeat the previous load instead of climbing. Squat top sets may grind; snatches never should."));
   root.appendChild(foot);
 }
-function refreshAllLoads(){render();}
+function refreshAllLoads(){
+  const cur=document.activeElement;
+  const id=cur&&cur.parentElement?Array.from(document.querySelectorAll("input[type=number]")).indexOf(cur):-1;
+  const pos=cur&&cur.selectionStart;
+  render();
+  if(id>=0){const inputs=document.querySelectorAll("input[type=number]");
+    if(inputs[id]){inputs[id].focus();try{inputs[id].setSelectionRange(pos,pos);}catch(e){}}}
+}
 render();
 </script>
 </body>

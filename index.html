@@ -1,0 +1,233 @@
+TYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0E1719">
+<title>Snatch &amp; Squat — 6-Week Block</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0E1719; --panel:#152325; --panel2:#1B2D30; --line:#2A4247;
+    --ink:#EAF2F0; --dim:#7E9A9B; --accent:#E8B23A; --accent2:#4FB0A5; --done:#4FB0A5;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,sans-serif;
+    padding-bottom:calc(40px + env(safe-area-inset-bottom));min-height:100vh;}
+  .disp{font-family:'Barlow Condensed',sans-serif;letter-spacing:.02em;}
+  .mono{font-family:'DM Mono',monospace;}
+  button{cursor:pointer;border:none;font-family:inherit;color:inherit;}
+  input:focus{outline:2px solid var(--accent);}
+  .pill:active{transform:scale(.97);}
+  header{padding:calc(20px + env(safe-area-inset-top)) 18px 14px;border-bottom:1px solid var(--line);
+    position:sticky;top:0;background:var(--bg);z-index:10;}
+  .row{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  .row::-webkit-scrollbar{display:none;}
+  input[type=number]{width:100%;margin-top:4px;background:var(--bg);color:var(--ink);
+    border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:16px;
+    font-family:'DM Mono',monospace;}
+  .card{text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:13px 14px;display:flex;align-items:center;gap:12px;width:100%;transition:all .15s;}
+  .box{flex-shrink:0;width:22px;height:22px;border-radius:6px;border:2px solid var(--dim);
+    display:flex;align-items:center;justify-content:center;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+// ─── Program data ────────────────────────────────────────────
+const MAXES=[
+  {key:"snatch",label:"Snatch 1RM"},{key:"clean",label:"Clean & Jerk 1RM"},
+  {key:"back",label:"Back Squat 1RM"},{key:"front",label:"Front Squat 1RM"}];
+const WEEK_LABELS=["Base volume","Base volume","Build +","Build ++","Intensity peak","Deload & test"];
+const ex=(name,lift,pct,reps,sets,note)=>({name,lift,pct,reps,sets,note});
+const DAYS=[
+ {title:"Day 1",subtitle:"Snatch volume + squat",ex:[
+   ex("Snatch","snatch",70,3,5),ex("Snatch Pull","snatch",90,4,4),
+   ex("Back Squat","back",75,4,5),ex("Snatch-grip RDL",null,null,6,3,"By feel"),
+   ex("Weighted plank / hollow",null,null,null,3,"Core")]},
+ {title:"Day 2",subtitle:"Clean emphasis",ex:[
+   ex("Clean & Jerk","clean",70,2,5),ex("Front Squat","front",80,3,4),
+   ex("Clean Pull","clean",90,4,3),ex("Pull-ups",null,null,8,4,"Add load if easy")]},
+ {title:"Day 3",subtitle:"Snatch positional",ex:[
+   ex("Snatch from blocks (knee)","snatch",72,3,5),ex("Overhead Squat",null,null,4,4,"Building"),
+   ex("Snatch High Pull","snatch",80,4,4),ex("Push Press",null,null,5,4,"By feel"),
+   ex("Core circuit",null,null,null,3)]},
+ {title:"Day 4",subtitle:"Heavy squat + strength",ex:[
+   ex("Back Squat","back",80,3,5,"Heavy day"),ex("Back Squat (back-off)","back",70,5,1),
+   ex("Snatch Deadlift","snatch",100,4,3),ex("Snatch Balance",null,null,3,5),
+   ex("Barbell Row",null,null,8,4)]},
+ {title:"Day 5",subtitle:"Full snatch practice",ex:[
+   ex("Snatch (full)","snatch",75,3,3,"After a moderate top double"),
+   ex("Power Snatch",null,null,2,5,"By feel"),ex("Front Squat","front",70,4,3),
+   ex("Trunk + upper back",null,null,null,3,"Accessory")]}];
+const DELTAS=[0,0,4,5,8,-10];
+function adjustPct(b,w){return b==null?null:Math.round(b+DELTAS[w]);}
+function volumeNote(w){if(w===4)return"Peak: drop 1–2 reps/set, push load";
+  if(w===5)return"Deload: ~40% less volume, then test";
+  if(w>=2&&w<=3)return"Drop one set on high-volume moves";return null;}
+function roundPlate(kg){return Math.round(kg/2.5)*2.5;}
+ 
+// ─── Persistent state (localStorage — lives on the device) ────
+const KEY="snatchSquatTracker_v1";
+let S={maxes:{snatch:"",clean:"",back:"",front:""},unit:"kg",week:0,day:0,done:{},showSettings:false};
+try{const raw=localStorage.getItem(KEY);if(raw){const s=JSON.parse(raw);
+  S=Object.assign(S,s);S.showSettings=false;}}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify({
+  maxes:S.maxes,unit:S.unit,week:S.week,day:S.day,done:S.done}));}catch(e){}}
+ 
+// ─── Render ──────────────────────────────────────────────────
+const root=document.getElementById("root");
+function computeLoad(e){
+  const pct=adjustPct(e.pct,S.week);
+  if(pct==null||!e.lift)return null;
+  const max=parseFloat(S.maxes[e.lift]);
+  if(!max||isNaN(max))return null;
+  const raw=max*pct/100;
+  const val=S.unit==="kg"?roundPlate(raw):Math.round(raw/5)*5;
+  return{pct,val};
+}
+function el(tag,attrs,...kids){
+  const n=document.createElement(tag);
+  for(const k in attrs){
+    if(k==="style")n.style.cssText=attrs[k];
+    else if(k==="class")n.className=attrs[k];
+    else if(k.startsWith("on"))n.addEventListener(k.slice(2).toLowerCase(),attrs[k]);
+    else n.setAttribute(k,attrs[k]);
+  }
+  for(const c of kids){if(c==null||c===false)continue;
+    n.appendChild(typeof c==="string"?document.createTextNode(c):c);}
+  return n;
+}
+function render(){
+  root.innerHTML="";
+  const day=DAYS[S.day];
+  const prefix=S.week+"-"+S.day+"-";
+  const doneCount=day.ex.filter((_,i)=>S.done[prefix+i]).length;
+  const pctDone=Math.round(doneCount/day.ex.length*100);
+ 
+  // Header
+  const head=el("header",{});
+  const hrow=el("div",{style:"display:flex;justify-content:space-between;align-items:flex-end;"});
+  const htitle=el("div",{});
+  htitle.appendChild(el("div",{class:"disp",style:"font-size:11px;letter-spacing:.28em;color:var(--accent);text-transform:uppercase;"},"6-Week Block"));
+  htitle.appendChild(el("div",{class:"disp",style:"font-size:30px;font-weight:700;line-height:1;margin-top:2px;text-transform:uppercase;"},"Snatch & Squat"));
+  hrow.appendChild(htitle);
+  hrow.appendChild(el("button",{class:"pill",style:"background:var(--panel2);color:var(--dim);border-radius:10px;padding:8px 12px;font-size:13px;border:1px solid var(--line);",
+    onClick:()=>{S.showSettings=!S.showSettings;render();}},"1RMs"));
+  head.appendChild(hrow);
+  root.appendChild(head);
+ 
+  // Settings
+  if(S.showSettings){
+    const p=el("div",{style:"background:var(--panel);padding:16px 18px;border-bottom:1px solid var(--line);"});
+    const top=el("div",{style:"display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"});
+    top.appendChild(el("span",{class:"disp",style:"font-size:15px;letter-spacing:.1em;text-transform:uppercase;"},"Your training maxes"));
+    const units=el("div",{style:"display:flex;gap:4px;"});
+    ["kg","lb"].forEach(u=>{units.appendChild(el("button",{
+      style:`background:${S.unit===u?"var(--accent)":"var(--panel2)"};color:${S.unit===u?"#0E1719":"var(--dim)"};font-weight:700;border-radius:8px;padding:5px 11px;font-size:13px;`,
+      onClick:()=>{S.unit=u;save();render();}},u));});
+    top.appendChild(units);p.appendChild(top);
+    const grid=el("div",{style:"display:grid;grid-template-columns:1fr 1fr;gap:10px;"});
+    MAXES.forEach(m=>{
+      const lab=el("label",{style:"display:block;"});
+      lab.appendChild(el("span",{style:"font-size:11px;color:var(--dim);letter-spacing:.05em;"},m.label));
+      const inp=el("input",{type:"number",inputmode:"decimal",placeholder:"—"});
+      inp.value=S.maxes[m.key];
+      inp.addEventListener("input",e=>{S.maxes[m.key]=e.target.value;save();
+        // update loads live without full re-render focus loss
+        document.querySelectorAll("[data-load]").forEach(refreshLoad);});
+      lab.appendChild(inp);grid.appendChild(lab);
+    });
+    p.appendChild(grid);
+    p.appendChild(el("p",{style:"font-size:11.5px;color:var(--dim);margin-top:12px;line-height:1.5;"},
+      "Working weights are calculated from these and adjust automatically each week. Pulls and deadlifts use your snatch or clean max as the reference."));
+    root.appendChild(p);
+  }
+ 
+  // Week selector
+  const wrow=el("div",{class:"row",style:"padding:14px 18px 6px;"});
+  WEEK_LABELS.forEach((wl,i)=>{
+    const b=el("button",{class:"pill",style:`flex:0 0 auto;background:${S.week===i?"var(--accent)":"var(--panel)"};color:${S.week===i?"#0E1719":"var(--ink)"};border-radius:10px;padding:8px 13px;text-align:left;min-width:74px;border:1px solid ${S.week===i?"var(--accent)":"var(--line)"};`,
+      onClick:()=>{S.week=i;save();render();}});
+    b.appendChild(el("div",{class:"disp",style:"font-size:17px;font-weight:700;line-height:1;"},"WK "+(i+1)));
+    b.appendChild(el("div",{style:"font-size:9.5px;opacity:.8;margin-top:2px;"},wl));
+    wrow.appendChild(b);
+  });
+  root.appendChild(wrow);
+ 
+  // Day selector
+  const drow=el("div",{class:"row",style:"padding:8px 18px 4px;"});
+  DAYS.forEach((d,i)=>{
+    drow.appendChild(el("button",{class:"pill",style:`flex:0 0 auto;background:${S.day===i?"var(--panel2)":"transparent"};color:${S.day===i?"var(--ink)":"var(--dim)"};border-radius:8px;padding:6px 12px;font-size:14px;font-weight:700;border:1px solid ${S.day===i?"var(--accent2)":"var(--line)"};`,
+      onClick:()=>{S.day=i;save();render();}},d.title.replace("Day ","D")));
+  });
+  root.appendChild(drow);
+ 
+  // Progress
+  const pw=el("div",{style:"padding:10px 18px 4px;"});
+  const pr=el("div",{style:"display:flex;justify-content:space-between;margin-bottom:6px;"});
+  pr.appendChild(el("span",{class:"disp",style:"font-size:20px;font-weight:700;text-transform:uppercase;"},day.subtitle));
+  pr.appendChild(el("span",{class:"mono",style:"font-size:13px;color:var(--dim);"},doneCount+"/"+day.ex.length));
+  pw.appendChild(pr);
+  const track=el("div",{style:"height:4px;background:var(--panel);border-radius:4px;overflow:hidden;"});
+  track.appendChild(el("div",{style:`height:100%;width:${pctDone}%;background:var(--done);transition:width .3s;`}));
+  pw.appendChild(track);root.appendChild(pw);
+ 
+  // Volume note
+  const vn=volumeNote(S.week);
+  if(vn)root.appendChild(el("div",{style:"margin:10px 18px 0;padding:9px 12px;background:var(--panel2);border-left:3px solid var(--accent);border-radius:6px;font-size:12.5px;"},vn));
+ 
+  // Exercises
+  const list=el("div",{style:"padding:12px 18px 0;display:flex;flex-direction:column;gap:10px;"});
+  day.ex.forEach((e,i)=>{
+    const isDone=!!S.done[prefix+i];
+    const card=el("button",{class:"card","data-load":i,
+      style:`opacity:${isDone?.72:1};border-color:${isDone?"var(--done)":"var(--line)"};background:${isDone?"var(--panel2)":"var(--panel)"};`,
+      onClick:()=>{S.done[prefix+i]=!S.done[prefix+i];save();render();}});
+    const box=el("div",{class:"box",style:`border-color:${isDone?"var(--done)":"var(--dim)"};background:${isDone?"var(--done)":"transparent"};`});
+    if(isDone)box.appendChild(el("span",{style:"color:#0E1719;font-size:14px;font-weight:700;"},"✓"));
+    card.appendChild(box);
+    const mid=el("div",{style:"flex:1;min-width:0;"});
+    mid.appendChild(el("div",{style:`font-size:15.5px;font-weight:700;text-decoration:${isDone?"line-through":"none"};`},e.name));
+    mid.appendChild(el("div",{style:"font-size:12.5px;color:var(--dim);margin-top:2px;"},
+      (e.sets)+(e.reps?" × "+e.reps:"")+(e.note?" · "+e.note:"")));
+    card.appendChild(mid);
+    const right=el("div",{style:"text-align:right;flex-shrink:0;",id:"ld-"+i});
+    card.appendChild(right);
+    list.appendChild(card);
+    fillLoad(right,e);
+  });
+  root.appendChild(list);
+ 
+  root.appendChild(el("div",{style:"padding:20px 18px 0;font-size:11px;color:var(--dim);line-height:1.6;"},
+    "Stop any set if bar speed or position degrades — load is a target, not a mandate. Progress saves automatically on this device."));
+}
+function fillLoad(container,e){
+  container.innerHTML="";
+  const load=computeLoad(e);
+  if(load){
+    const v=el("div",{class:"mono",style:"font-size:18px;color:var(--accent);font-weight:500;"});
+    v.appendChild(document.createTextNode(load.val+" "));
+    v.appendChild(el("span",{style:"font-size:11px;color:var(--dim);"},S.unit));
+    container.appendChild(v);
+    container.appendChild(el("div",{class:"mono",style:"font-size:10.5px;color:var(--dim);"},load.pct+"%"));
+  }else{
+    container.appendChild(el("div",{class:"mono",style:"font-size:12px;color:var(--dim);"},
+      e.lift&&!S.maxes[e.lift]?"set 1RM":"—"));
+  }
+}
+function refreshLoad(node){
+  const i=parseInt(node.getAttribute("data-load"),10);
+  const e=DAYS[S.day].ex[i];
+  const right=node.querySelector("[id^=ld-]");
+  if(right)fillLoad(right,e);
+}
+render();
+</script>
+</body>
+</html>
